@@ -28,6 +28,7 @@ import Control.DeepSeq (NFData)
 import Control.Monad (forM, guard)
 import qualified Data.ByteString as BS
 import Data.Char
+import Data.Coerce
 import Data.Ix (inRange)
 import qualified Data.Map as Map
 import Data.Text (Text)
@@ -79,7 +80,7 @@ singleCellRefRaw (row, col) = T.concat [int2col col, T.pack (show row)]
 
 -- | reverse to 'mkCellRef'
 fromSingleCellRef :: CellRef -> Maybe (Int, Int)
-fromSingleCellRef = fromSingleCellRefRaw . unCellRef
+fromSingleCellRef = fromSingleCellRefRaw . coerce
 
 fromSingleCellRefRaw :: Text -> Maybe (Int, Int)
 fromSingleCellRefRaw t = do
@@ -93,7 +94,7 @@ fromSingleCellRefRaw t = do
 fromSingleCellRefNoting :: CellRef -> (Int, Int)
 fromSingleCellRefNoting ref = fromJustNote errMsg $ fromSingleCellRefRaw txt
   where
-    txt = unCellRef ref
+    txt = coerce ref
     errMsg = "Bad cell reference '" ++ T.unpack txt ++ "'"
 
 -- | Excel range (e.g. @D13:H14@), actually store as as 'CellRef' in
@@ -109,7 +110,7 @@ mkRange fr to = CellRef $ T.concat [singleCellRefRaw fr, T.pack ":", singleCellR
 -- | reverse to 'mkRange'
 fromRange :: Range -> Maybe ((Int, Int), (Int, Int))
 fromRange r =
-  case T.split (== ':') (unCellRef r) of
+  case T.split (== ':') (coerce r) of
     [from, to] -> (,) <$> fromSingleCellRefRaw from <*> fromSingleCellRefRaw to
     _ -> Nothing
 
