@@ -176,4 +176,5 @@ executable streamin
                , criterion
                , xlsx
                , conduit
+               , text
   default-language: Haskell2010
