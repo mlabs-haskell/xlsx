@@ -21,6 +21,7 @@ import Codec.Xlsx.Parser.Internal.PivotTable
 import Codec.Xlsx.Types.Internal (unsafeRefId)
 import Codec.Xlsx.Types.PivotTable.Internal
 import Codec.Xlsx.Writer.Internal.PivotTable
+import Codec.Xlsx.Types.Cell
 
 import Diff
 
@@ -92,7 +93,7 @@ testPivotTable =
     countField = PivotFieldName "Count"
 
 testPivotSrcCells :: CellMap
-testPivotSrcCells =
+testPivotSrcCells = toNested $
   M.fromList $
   concat
     [ [((row, col), def & cellValue ?~ v) | (col, v) <- zip [1 ..] cells]
