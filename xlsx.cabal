@@ -153,6 +153,7 @@ test-suite data-test
                , vector
                , xlsx
                , xml-conduit >= 1.1.0
+               , conduit
   Default-Language:     Haskell2010
 
 source-repository head
