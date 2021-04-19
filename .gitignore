@@ -1,9 +1,14 @@
 TAGS
 cabal-dev
 dist
+dist-newstyle
 *sandbox*
 #*#
 *.*~
 specs
 samples
 .stack-work
+
+# nix
+result
+result-doc
