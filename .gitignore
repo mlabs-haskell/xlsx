@@ -12,3 +12,4 @@ samples
 # nix
 result
 result-doc
+*.lock
