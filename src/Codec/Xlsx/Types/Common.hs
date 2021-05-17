@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TemplateHaskell #-}
+
 module Codec.Xlsx.Types.Common
   ( CellRef(..)
   , singleCellRef
@@ -19,6 +21,16 @@ module Codec.Xlsx.Types.Common
   , dateToNumber
   , int2col
   , col2int
+  , RowIndex
+  , ColIndex
+  -- ** prisms
+  , _XlsxText
+  , _XlsxRichText
+  , _CellText
+  , _CellDouble
+  , _CellBool
+  , _CellRich
+  , _CellError
   ) where
 
 import GHC.Generics (Generic)
@@ -28,6 +40,7 @@ import Control.DeepSeq (NFData)
 import Control.Monad (forM, guard)
 import qualified Data.ByteString as BS
 import Data.Char
+import Data.Coerce
 import Data.Ix (inRange)
 import qualified Data.Map as Map
 import Data.Text (Text)
@@ -39,6 +52,7 @@ import Safe
 import Text.XML
 import Text.XML.Cursor
 
+import Control.Lens(makePrisms)
 import Codec.Xlsx.Parser.Internal
 import Codec.Xlsx.Types.RichText
 import Codec.Xlsx.Writer.Internal
@@ -71,15 +85,15 @@ instance NFData CellRef
 -- | Render position in @(row, col)@ format to an Excel reference.
 --
 -- > mkCellRef (2, 4) == "D2"
-singleCellRef :: (Int, Int) -> CellRef
+singleCellRef :: (RowIndex, ColIndex) -> CellRef
 singleCellRef = CellRef . singleCellRefRaw
 
 singleCellRefRaw :: (Int, Int) -> Text
 singleCellRefRaw (row, col) = T.concat [int2col col, T.pack (show row)]
 
 -- | reverse to 'mkCellRef'
-fromSingleCellRef :: CellRef -> Maybe (Int, Int)
-fromSingleCellRef = fromSingleCellRefRaw . unCellRef
+fromSingleCellRef :: CellRef -> Maybe (RowIndex, ColIndex)
+fromSingleCellRef = fromSingleCellRefRaw . coerce
 
 fromSingleCellRefRaw :: Text -> Maybe (Int, Int)
 fromSingleCellRefRaw t = do
@@ -93,7 +107,7 @@ fromSingleCellRefRaw t = do
 fromSingleCellRefNoting :: CellRef -> (Int, Int)
 fromSingleCellRefNoting ref = fromJustNote errMsg $ fromSingleCellRefRaw txt
   where
-    txt = unCellRef ref
+    txt = coerce ref
     errMsg = "Bad cell reference '" ++ T.unpack txt ++ "'"
 
 -- | Excel range (e.g. @D13:H14@), actually store as as 'CellRef' in
@@ -109,7 +123,7 @@ mkRange fr to = CellRef $ T.concat [singleCellRefRaw fr, T.pack ":", singleCellR
 -- | reverse to 'mkRange'
 fromRange :: Range -> Maybe ((Int, Int), (Int, Int))
 fromRange r =
-  case T.split (== ':') (unCellRef r) of
+  case T.split (== ':') (coerce r) of
     [from, to] -> (,) <$> fromSingleCellRefRaw from <*> fromSingleCellRefRaw to
     _ -> Nothing
 
@@ -143,6 +157,7 @@ data XlsxText = XlsxText Text
               | XlsxRichText [RichTextRun]
               deriving (Eq, Ord, Show, Generic)
 
+
 instance NFData XlsxText
 
 xlsxTextToCellValue :: XlsxText -> CellValue
@@ -168,6 +183,7 @@ data CellValue
   | CellRich [RichTextRun]
   | CellError ErrorType
   deriving (Eq, Ord, Show, Generic)
+
 
 instance NFData CellValue
 
@@ -385,3 +401,9 @@ instance ToAttrVal ErrorType where
   toAttrVal ErrorNum = "#NUM!"
   toAttrVal ErrorRef = "#REF!"
   toAttrVal ErrorValue = "#VALUE!"
+
+type RowIndex = Int
+type ColIndex = Int
+
+makePrisms ''XlsxText
+makePrisms ''CellValue
