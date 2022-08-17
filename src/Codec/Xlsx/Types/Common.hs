@@ -4,6 +4,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Codec.Xlsx.Types.Common
   ( CellRef(..)
@@ -22,8 +23,8 @@ module Codec.Xlsx.Types.Common
   , DateBase(..)
   , dateFromNumber
   , dateToNumber
-  , int2col
-  , col2int
+  , columnIndexToText -- previously int2col
+  , textToColumnIndex -- previously col2int
   -- ** prisms
   , _XlsxText
   , _XlsxRichText
@@ -32,6 +33,8 @@ module Codec.Xlsx.Types.Common
   , _CellBool
   , _CellRich
   , _CellError
+  , RowIndex(..)
+  , ColumnIndex(..)
   ) where
 
 import GHC.Generics (Generic)
@@ -65,9 +68,19 @@ import Data.Profunctor(dimap)
 import Control.Lens(makePrisms)
 #endif
 
+newtype RowIndex = RowIndex {unRowIndex :: Int}
+  deriving (Eq, Ord, Show, Generic, Num, Real, Enum, Integral)
+newtype ColumnIndex = ColumnIndex {unColumnIndex :: Int}
+  deriving (Eq, Ord, Show, Generic, Num, Real, Enum, Integral)
+instance NFData RowIndex
+instance NFData ColumnIndex
+
+instance ToAttrVal RowIndex where
+  toAttrVal = toAttrVal . unRowIndex
+
 -- | convert column number (starting from 1) to its textual form (e.g. 3 -> \"C\")
-int2col :: Int -> Text
-int2col = T.pack . reverse . map int2let . base26
+columnIndexToText :: ColumnIndex -> Text
+columnIndexToText = T.pack . reverse . map int2let . base26 . unColumnIndex
     where
         int2let 0 = 'Z'
         int2let x = chr $ (x - 1) + ord 'A'
@@ -76,9 +89,9 @@ int2col = T.pack . reverse . map int2let . base26
                         i'' = if i' == 0 then 26 else i'
                     in seq i' (i' : base26 ((i - i'') `div` 26))
 
--- | reverse to 'int2col'
-col2int :: Text -> Int
-col2int = T.foldl' (\i c -> i * 26 + let2int c) 0
+-- | reverse of 'columnIndexToText'
+textToColumnIndex :: Text -> ColumnIndex
+textToColumnIndex = ColumnIndex . T.foldl' (\i c -> i * 26 + let2int c) 0
     where
         let2int c = 1 + ord c - ord 'A'
 
@@ -93,26 +106,26 @@ instance NFData CellRef
 -- | Render position in @(row, col)@ format to an Excel reference.
 --
 -- > mkCellRef (2, 4) == "D2"
-singleCellRef :: (Int, Int) -> CellRef
+singleCellRef :: (RowIndex, ColumnIndex) -> CellRef
 singleCellRef = CellRef . singleCellRefRaw
 
-singleCellRefRaw :: (Int, Int) -> Text
-singleCellRefRaw (row, col) = T.concat [int2col col, T.pack (show row)]
+singleCellRefRaw :: (RowIndex, ColumnIndex) -> Text
+singleCellRefRaw (row, col) = T.concat [columnIndexToText col, T.pack (show row)]
 
 -- | reverse to 'mkCellRef'
-fromSingleCellRef :: CellRef -> Maybe (Int, Int)
+fromSingleCellRef :: CellRef -> Maybe (RowIndex, ColumnIndex)
 fromSingleCellRef = fromSingleCellRefRaw . unCellRef
 
-fromSingleCellRefRaw :: Text -> Maybe (Int, Int)
+fromSingleCellRefRaw :: Text -> Maybe (RowIndex, ColumnIndex)
 fromSingleCellRefRaw t = do
   let (colT, rowT) = T.span (inRange ('A', 'Z')) t
   guard $ not (T.null colT) && not (T.null rowT) && T.all isDigit rowT
-  row <- decimal rowT
-  return (row, col2int colT)
+  row <- RowIndex <$> decimal rowT
+  return (row, textToColumnIndex colT)
 
 -- | reverse to 'mkCellRef' expecting valid reference and failig with
 -- a standard error message like /"Bad cell reference 'XXX'"/
-fromSingleCellRefNoting :: CellRef -> (Int, Int)
+fromSingleCellRefNoting :: CellRef -> (RowIndex, ColumnIndex)
 fromSingleCellRefNoting ref = fromJustNote errMsg $ fromSingleCellRefRaw txt
   where
     txt = unCellRef ref
@@ -125,11 +138,11 @@ type Range = CellRef
 -- | Render range
 --
 -- > mkRange (2, 4) (6, 8) == "D2:H6"
-mkRange :: (Int, Int) -> (Int, Int) -> Range
+mkRange :: (RowIndex, ColumnIndex) -> (RowIndex, ColumnIndex) -> Range
 mkRange fr to = CellRef $ T.concat [singleCellRefRaw fr, T.pack ":", singleCellRefRaw to]
 
 -- | reverse to 'mkRange'
-fromRange :: Range -> Maybe ((Int, Int), (Int, Int))
+fromRange :: Range -> Maybe ((RowIndex, ColumnIndex), (RowIndex, ColumnIndex))
 fromRange r =
   case T.split (== ':') (unCellRef r) of
     [from, to] -> (,) <$> fromSingleCellRefRaw from <*> fromSingleCellRefRaw to
